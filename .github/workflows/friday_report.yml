@@ -1,0 +1,28 @@
+name: Weekly Market Report
+on:
+  schedule:
+    # 17:00 UTC is 6:00 PM (18:00) in West Africa / Central Europe
+    - cron: '0 17 * * 5'
+  workflow_dispatch: # This adds a "Run Now" button for testing
+
+jobs:
+  run-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install yfinance pandas lxml
+
+      - name: Execute script
+        env:
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+        run: python main.py
