@@ -1,9 +1,8 @@
 name: Weekly Market Report
 on:
   schedule:
-    # 17:00 UTC is 6:00 PM (18:00) in West Africa / Central Europe
     - cron: '0 17 * * 5'
-  workflow_dispatch: # This adds a "Run Now" button for testing
+  workflow_dispatch: 
 
 jobs:
   run-report:
@@ -20,6 +19,9 @@ jobs:
       - name: Install dependencies
         run: |
           pip install yfinance pandas lxml
+
+      - name: Debug - List Files
+        run: ls -R
 
       - name: Execute script
         env:
