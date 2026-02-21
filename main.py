@@ -13,8 +13,14 @@ EMAIL_PASS = os.environ.get("EMAIL_PASS")
 
 def get_sp500_movers():
     print("🚀 Fetching S&P 500 Tickers...")
-    # Get the current S&P 500 list from Wikipedia
-    table = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')[0]
+    import requests
+    
+    # We add a 'User-Agent' so Wikipedia knows we are a real browser
+    url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+    
+    response = requests.get(url, headers=headers)
+    table = pd.read_html(response.text)[0]
     tickers = table['Symbol'].tolist()
     
     # Clean tickers (some have dots like BRK.B which Yahoo prefers as BRK-B)
@@ -22,15 +28,12 @@ def get_sp500_movers():
     
     print(f"📊 Analyzing {len(tickers)} companies...")
     
-    # Download 5 days of data for the whole group (fastest method)
-    # This gets data from Monday to Friday
+    # Download data
     data = yf.download(tickers, period="5d", interval="1d", group_by='ticker', threads=True)
     
     performance = []
-    
     for ticker in tickers:
         try:
-            # Get the closing price from 5 days ago and today
             df = data[ticker]
             if not df.empty and len(df) >= 2:
                 start_price = df['Close'].iloc[0]
@@ -45,10 +48,7 @@ def get_sp500_movers():
         except:
             continue
 
-    # Convert to DataFrame for easy sorting
     perf_df = pd.DataFrame(performance)
-    
-    # Get Top 10 and Bottom 10
     top_10 = perf_df.nlargest(10, 'Change')
     bottom_10 = perf_df.nsmallest(10, 'Change')
     
