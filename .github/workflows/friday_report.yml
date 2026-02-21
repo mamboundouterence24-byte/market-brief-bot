@@ -6,32 +6,19 @@ jobs:
   run-report:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: main  # This forces it to look at the 'main' branch
 
-      - name: 2. List Everything (Deep Search)
-        run: |
-          echo "Current directory:"
-          pwd
-          echo "Files in root:"
-          ls -F
-          echo "Full tree:"
-          find . -maxdepth 2 -not -path '*/.*'
-
-      - name: 3. Install Dependencies
+      - name: Install Libs
         run: pip install yfinance pandas lxml
 
-      - name: 4. Execute Script
+      - name: Force Run
         env:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
         run: |
-          # If main.py exists, run it. If not, this will tell us why.
-          if [ -f "main.py" ]; then
-            python main.py
-          else
-            echo "CRITICAL ERROR: main.py not found in the root directory."
-            exit 1
-          fi
+          # This command finds the first .py file it sees and runs it
+          SCRIPT=$(ls *.py | head -n 1)
+          echo "Running script: $SCRIPT"
+          python "$SCRIPT"
+ 
