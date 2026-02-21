@@ -24,8 +24,11 @@ jobs:
       - name: 4. Check File Location (Debug)
         run: ls -R
 
-      - name: 5. Execute script
+      
+      - name: Execute script
         env:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-        run: python ./main.py
+        run: |
+          # This command finds ANY python file and runs it
+          python $(find . -name "*.py" -not -path "*/.*")
