@@ -25,7 +25,7 @@ def get_market_data():
     try:
         url_ftse = 'https://en.wikipedia.org/wiki/FTSE_100_Index'
         resp_ftse = requests.get(url_ftse, headers=headers)
-        df_ftse = pd.read_html(StringIO(resp_ftse.text))[4] # Table index may vary
+        df_ftse = pd.read_html(StringIO(resp_ftse.text))[3] # Table index may vary
         results.append(f"FTSE 100: {len(df_ftse)} companies listed.")
     except Exception as e:
         results.append(f"FTSE 100 Fetch Error: {e}")
