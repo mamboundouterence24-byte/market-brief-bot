@@ -1,113 +1,72 @@
-import yfinance as yf
-import pandas as pd
-import smtplib
 import os
+import smtplib
+import pandas as pd
 import requests
+from io import StringIO
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
-# --- CONFIGURATION ---
-EMAIL_USER = os.environ.get("EMAIL_USER")
-EMAIL_PASS = os.environ.get("EMAIL_PASS")
-
-def get_sp500_movers():
-    print("🚀 Fetching S&P 500 Tickers...")
+def get_market_data():
+    """Fetches tickers and basic info for the requested indices."""
+    results = []
+    headers = {'User-Agent': 'Mozilla/5.0'}
     
-    # We use a Session and a very common Browser ID to avoid the 403 error
-    session = requests.Session()
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
-    }
-    
-    url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
-    
+    # 1. S&P 500 from Wikipedia
     try:
-        response = session.get(url, headers=headers, timeout=10)
-        response.raise_for_status() # This will stop the script if it gets a 403
-        
-        table = pd.read_html(response.text)[0]
-        tickers = table['Symbol'].tolist()
-        # Clean tickers for Yahoo Finance
-        tickers = [t.replace('.', '-') for t in tickers]
-        
-        print(f"📊 Analyzing {len(tickers)} companies...")
-        
-        # Download data for the last 5 days
-        data = yf.download(tickers, period="5d", interval="1d", group_by='ticker', threads=True)
-        
-        performance = []
-        for ticker in tickers:
-            try:
-                df = data[ticker]
-                if not df.empty and len(df) >= 2:
-                    start_price = df['Close'].iloc[0]
-                    end_price = df['Close'].iloc[-1]
-                    pct_change = ((end_price - start_price) / start_price) * 100
-                    
-                    performance.append({
-                        'Ticker': ticker,
-                        'Price': end_price,
-                        'Change': pct_change
-                    })
-            except:
-                continue
-
-        perf_df = pd.DataFrame(performance)
-        return perf_df.nlargest(10, 'Change'), perf_df.nsmallest(10, 'Change')
-        
+        url_sp = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
+        resp_sp = requests.get(url_sp, headers=headers)
+        df_sp = pd.read_html(StringIO(resp_sp.text))[0]
+        results.append(f"S&P 500: {len(df_sp)} companies listed.")
     except Exception as e:
-        print(f"❌ Error fetching data: {e}")
-        # Backup: If Wikipedia fails, just use a small hardcoded list so the email still sends
-        print("⚠️ Falling back to top-tier tech stocks...")
-        fallback_tickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META', 'NFLX']
-        data = yf.download(fallback_tickers, period="5d")
-        # (Simplified fallback logic omitted for brevity, but this prevents the crash)
-        raise e
+        results.append(f"S&P 500 Fetch Error: {e}")
 
-def build_html_report(top, bot):
-    now = datetime.now().strftime('%Y-%m-%d')
-    html = f"""
-    <html>
-    <body style="font-family: Arial, sans-serif;">
-        <h2 style="color: #2c3e50;">Market Intelligence Report: {now}</h2>
-        <h3 style="color: #27ae60;">🚀 Top 10 Winners</h3>
-        <table border="1" cellpadding="8" style="border-collapse: collapse; width: 100%;">
-            <tr style="background-color: #f2f2f2;"><th>Ticker</th><th>Price</th><th>Weekly Change</th></tr>
-    """
-    for _, row in top.iterrows():
-        html += f"<tr><td><b>{row['Ticker']}</b></td><td>${row['Price']:.2f}</td><td style='color:green;'>+{row['Change']:.2f}%</td></tr>"
-    
-    html += "</table><br><h3 style='color: #c0392b;'>📉 Top 10 Losers</h3><table border='1' cellpadding='8' style='border-collapse: collapse; width: 100%;'>"
-    html += "<tr style='background-color: #f2f2f2;'><th>Ticker</th><th>Price</th><th>Weekly Change</th></tr>"
-    
-    for _, row in bot.iterrows():
-        html += f"<tr><td><b>{row['Ticker']}</b></td><td>${row['Price']:.2f}</td><td style='color:red;'>{row['Change']:.2f}%</td></tr>"
-        
-    html += "</table></body></html>"
-    return html
+    # 2. FTSE 100 
+    try:
+        url_ftse = 'https://en.wikipedia.org/wiki/FTSE_100_Index'
+        resp_ftse = requests.get(url_ftse, headers=headers)
+        df_ftse = pd.read_html(StringIO(resp_ftse.text))[4] # Table index may vary
+        results.append(f"FTSE 100: {len(df_ftse)} companies listed.")
+    except Exception as e:
+        results.append(f"FTSE 100 Fetch Error: {e}")
+
+    # 3. DAX 40 (Formerly DAX 30)
+    try:
+        url_dax = 'https://en.wikipedia.org/wiki/DAX'
+        resp_dax = requests.get(url_dax, headers=headers)
+        df_dax = pd.read_html(StringIO(resp_dax.text))[4]
+        results.append(f"DAX 40: {len(df_dax)} companies listed.")
+    except Exception as e:
+        results.append(f"DAX Fetch Error: {e}")
+
+    return "\n".join(results)
 
 def send_email(content):
-    if not EMAIL_USER or not EMAIL_PASS:
-        print("❌ Missing Secrets!")
+    sender_email = os.environ.get('EMAIL_USER')
+    password = os.environ.get('EMAIL_PASS')
+    receiver_email = "mamboundouterence24@gmail.com"
+
+    if not sender_email or not password:
+        print("❌ Error: EMAIL_USER or EMAIL_PASS secrets are missing!")
         return
 
-    msg = MIMEMultipart()
-    msg['Subject'] = f"Weekly Market Intelligence - {datetime.now().strftime('%b %d')}"
-    msg['From'] = EMAIL_USER
-    msg['To'] = EMAIL_USER
-    msg.attach(MIMEText(content, 'html'))
-    
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-        server.login(EMAIL_USER, EMAIL_PASS)
-        server.send_message(msg)
-    print("✅ SUCCESS: Intelligence report sent!")
+    message = MIMEMultipart()
+    message["From"] = sender_email
+    message["To"] = receiver_email
+    message["Subject"] = f"Market Briefing: {datetime.now().strftime('%Y-%m-%d')}"
+
+    body = f"Hello,\n\nHere is your market update for the S&P 500, FTSE 100, and DAX:\n\n{content}\n\nBest regards,\nYour Market Bot"
+    message.attach(MIMEText(body, "plain"))
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(sender_email, password)
+            server.sendmail(sender_email, receiver_email, message.as_string())
+        print("✅ Email sent successfully!")
+    except Exception as e:
+        print(f"❌ Failed to send email: {e}")
 
 if __name__ == "__main__":
-    try:
-        winners, losers = get_sp500_movers()
-        report_content = build_html_report(winners, losers)
-        send_email(report_content)
-    except Exception as e:
-        print(f"Full crash log: {e}")
+    print("🚀 Starting Market Report...")
+    report_data = get_market_data()
+    send_email(report_data)
