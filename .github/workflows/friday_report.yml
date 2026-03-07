@@ -4,7 +4,7 @@ on:
   schedule:
     # Runs every Saturday at 09:45 AM WAT (08:45 AM UTC)
     - cron: '45 8 * * 6'
-  workflow_dispatch: # Allows you to manually trigger a report from the Actions tab
+  workflow_dispatch: # Allows you to manually trigger a report for testing
 
 jobs:
   build:
@@ -26,7 +26,7 @@ jobs:
 
       - name: Run Market Bot
         env:
-          # This maps your GitHub Secrets to the Python script
+          # These must match the names in your GitHub Secrets exactly
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
