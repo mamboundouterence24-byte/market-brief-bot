@@ -1,8 +1,11 @@
 name: Weekly Market Report
+
 on:
   schedule:
-    # 09:10 UTC is 10:10 AM WAT (Gabon)
-    - cron: '10 9 * * 6' 
+    # Saturday at 10:10 AM WAT (09:10 UTC)
+    - cron: '10 9 * * 6'
+    # Friday at 6:00 PM WAT (17:00 UTC)
+    - cron: '0 17 * * 5'
   workflow_dispatch:
   
 jobs:
