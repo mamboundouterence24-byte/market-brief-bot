@@ -2,29 +2,32 @@ name: Weekly Market Report
 
 on:
   schedule:
-    # Saturday at 10:10 AM WAT (09:10 UTC)
-    - cron: '10 9 * * 6'
-    # Friday at 6:00 PM WAT (17:00 UTC)
-    - cron: '0 17 * * 5'
-  workflow_dispatch:
-  
+    # Runs every Saturday at 09:45 AM WAT (08:45 AM UTC)
+    - cron: '45 8 * * 6'
+  workflow_dispatch: # Allows you to manually trigger a report from the Actions tab
+
 jobs:
-  run-report:
+  build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Libs
-        run: pip install yfinance pandas lxml
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-      - name: Force Run
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Market Bot
         env:
+          # This maps your GitHub Secrets to the Python script
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-        run: |
-          # This command finds the first .py file it sees and runs it
-          SCRIPT=$(ls *.py | head -n 1)
-          echo "Running script: $SCRIPT"
-          python "$SCRIPT"
- 
+          EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
+        run: python main.py
