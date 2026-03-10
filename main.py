@@ -4,39 +4,53 @@ from email.mime.text import MIMEText
 from datetime import datetime
 import os
 
-def get_market_data():
-    # Tickers for S&P 500, FTSE 100, and DAX
-    tickers = {"S&P 500": "^GSPC", "FTSE 100": "^FTSE", "DAX 40": "^GDAXI"}
-    report = f"Market Briefing: {datetime.now().strftime('%Y-%m-%d')}\n\n"
-    
-    for name, symbol in tickers.items():
-        ticker = yf.Ticker(symbol)
-        # Get the most recent 2 days to calculate change
-        hist = ticker.history(period="2d")
-        
+def get_winners_losers(ticker_list):
+    data = []
+    # Download 1 week of data for comparison
+    for symbol in ticker_list:
+        t = yf.Ticker(symbol)
+        hist = t.history(period="5d")
         if len(hist) >= 2:
-            close_price = hist['Close'].iloc[-1]
-            prev_close = hist['Close'].iloc[-2]
-            pct_change = ((close_price - prev_close) / prev_close) * 100
-            
-            direction = "▲" if pct_change >= 0 else "▼"
-            report += f"{name}: {close_price:,.2f} ({direction} {pct_change:.2f}%)\n"
-        else:
-            report += f"{name}: Data currently unavailable\n"
-            
+            change = ((hist['Close'].iloc[-1] - hist['Close'].iloc[0]) / hist['Close'].iloc[0]) * 100
+            data.append({'symbol': symbol, 'change': change})
+    
+    # Sort and pick top 3 for each
+    sorted_data = sorted(data, key=lambda x: x['change'], reverse=True)
+    return sorted_data[:3], sorted_data[-3:]
+
+def get_market_intelligence():
+    indices = {"S&P 500": "^GSPC", "FTSE 100": "^FTSE", "DAX 40": "^GDAXI"}
+    # Top influential stocks for each index
+    sp500_stocks = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "BRK-B"]
+    ftse_stocks = ["SHEL.L", "AZN.L", "HSBA.L", "ULVR.L", "BP.L", "GSK.L", "RIO.L"]
+    
+    report = f"Market Intelligence Report: {datetime.now().strftime('%Y-%m-%d')}\n"
+    report += "="*40 + "\n\n"
+
+    for name, sym in indices.items():
+        idx = yf.Ticker(sym)
+        h = idx.history(period="5d")
+        weekly_chg = ((h['Close'].iloc[-1] - h['Close'].iloc[0]) / h['Close'].iloc[0]) * 100
+        report += f"{name}: {h['Close'].iloc[-1]:,.2f} ({weekly_chg:+.2f}% this week)\n"
+    
+    report += "\n🚀 TOP WEEKLY MOVERS (S&P 500 Sample)\n"
+    winners, losers = get_winners_losers(sp500_stocks)
+    for w in winners: report += f"  {w['symbol']}: {w['change']:+.2f}%\n"
+    report += "\n📉 BOTTOM WEEKLY MOVERS (S&P 500 Sample)\n"
+    for l in losers: report += f"  {l['symbol']}: {l['change']:+.2f}%\n"
+
     return report
 
 def send_email(content):
     msg = MIMEText(content)
-    msg['Subject'] = f"Market Update - {datetime.now().strftime('%d %b %Y')}"
+    msg['Subject'] = f"Weekly Market Intelligence - {datetime.now().strftime('%d %b')}"
     msg['From'] = os.environ.get('EMAIL_USER')
     msg['To'] = os.environ.get('EMAIL_RECEIVER')
-
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
         server.login(os.environ.get('EMAIL_USER'), os.environ.get('EMAIL_PASS'))
         server.send_message(msg)
 
 if __name__ == "__main__":
-    market_report = get_market_data()
-    send_email(market_report)
-    print("Report sent successfully!")
+    content = get_market_intelligence()
+    send_email(content)
+    print("Intelligence report sent!")
