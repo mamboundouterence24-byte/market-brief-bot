@@ -1,69 +1,92 @@
 import yfinance as yf
-import requests
-import smtplib
-from email.mime.text import MIMEText
-from datetime import datetime
 import os
+import smtplib
+from email.message import EmailMessage
+from datetime import datetime
+from newsapi import NewsApiClient
 
-def get_market_intelligence():
-    # 1. Fetch Global Indices (The "Must-Have" Section)
-    indices = {"S&P 500": "^GSPC", "FTSE 100": "^FTSE", "DAX 40": "^GDAXI"}
-    report = f"Market Intelligence Report: {datetime.now().strftime('%Y-%m-%d')}\n"
-    report += "="*50 + "\n\n"
-    report += "📊 GLOBAL INDICES\n"
+# --- CONFIGURATION ---
+EMAIL_USER = os.environ.get('EMAIL_USER')
+EMAIL_PASS = os.environ.get('EMAIL_PASS')
+NEWS_API_KEY = os.environ.get('NEWS_API_KEY')
+RECEIVER_EMAIL = "mamboundouterence24@gmail.com"
+
+# Indices and Stock Watchlist
+INDICES = {"S&P 500": "^GSPC", "FTSE 100": "^FTSE", "DAX 40": "^GDAXI"}
+WATCHLIST = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA", "NVDA", "BRK-B", "LLY", "BP.L", "SHEL.L", "SAP.DE", "SIE.DE"]
+
+def get_weekly_stats(symbol):
+    """Calculates price and % change from Monday Open to Friday Close."""
+    ticker = yf.Ticker(symbol)
+    # period="5d" captures the Monday-Friday trading window
+    hist = ticker.history(period="5d")
     
-    for name, sym in indices.items():
-        idx = yf.Ticker(sym)
-        h = idx.history(period="2d")
-        if len(h) >= 2:
-            change = ((h['Close'].iloc[-1] - h['Close'].iloc[-2]) / h['Close'].iloc[-2]) * 100
-            report += f"{name}: {h['Close'].iloc[-1]:,.2f} ({change:+.2f}% Today)\n"
-
-    # 2. Fetch Top 5 Winners & Losers (The "Deep Dive" Section)
-    # Using key global bellwethers for a representative sample
-    stocks = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "BRK-B", "LLY", "V", "SHEL.L", "BP.L", "SAP.DE", "SIE.DE", "AIR.PA"]
-    data = []
-    for symbol in stocks:
-        t = yf.Ticker(symbol)
-        hist = t.history(period="5d")
-        if len(hist) >= 2:
-            w_change = ((hist['Close'].iloc[-1] - hist['Close'].iloc[0]) / hist['Close'].iloc[0]) * 100
-            data.append({'symbol': symbol, 'change': w_change})
+    if len(hist) < 2:
+        return 0.0, 0.0
     
-    sorted_stocks = sorted(data, key=lambda x: x['change'], reverse=True)
+    monday_open = hist['Open'].iloc[0]
+    friday_close = hist['Close'].iloc[-1]
+    weekly_perf = ((friday_close - monday_open) / monday_open) * 100
     
-    report += "\n🚀 TOP 5 WEEKLY WINNERS\n"
-    for w in sorted_stocks[:5]: report += f"  {w['symbol']}: {w['change']:+.2f}%\n"
-    
-    report += "\n📉 BOTTOM 5 WEEKLY LOSERS\n"
-    for l in sorted_stocks[-5:]: report += f"  {l['symbol']}: {l['change']:+.2f}%\n"
+    return friday_close, weekly_perf
 
-    # 3. Professional News Recap (Filtering for Quality)
-    api_key = os.environ.get('NEWS_API_KEY')
-    domains = "reuters.com,bloomberg.com,wsj.com,cnbc.com,ft.com"
-    url = f'https://newsapi.org/v2/everything?domains={domains}&q=finance&sortBy=publishedAt&apiKey={api_key}'
-    
-    try:
-        response = requests.get(url).json()
-        report += "\n📰 PROFESSIONAL MARKET HEADLINES\n"
-        if response.get('status') == 'ok':
-            for art in response['articles'][:5]:
-                report += f"- {art['title']} ({art['source']['name']})\n"
-    except:
-        report += "\n(Professional news feed temporarily unavailable)\n"
+def get_market_news():
+    """Fetches professional headlines via NewsAPI."""
+    newsapi = NewsApiClient(api_key=NEWS_API_KEY)
+    top_headlines = newsapi.get_top_headlines(
+        sources='bloomberg,reuters,the-wall-street-journal,fortune,business-insider',
+        language='en'
+    )
+    articles = top_headlines.get('articles', [])
+    return [f"- {a['title']} ({a['source']['name']})" for a in articles[:5]]
 
-    return report
+# --- DATA PROCESSING ---
+report_date = datetime.now().strftime("%Y-%m-%d")
+body = f"Market Intelligence Report: {report_date} (Weekly Review)\n"
+body += "="*40 + "\n\n"
 
-def send_email(content):
-    msg = MIMEText(content)
-    msg['Subject'] = f"Weekly Market Deep Dive - {datetime.now().strftime('%d %b')}"
-    msg['From'] = os.environ.get('EMAIL_USER')
-    msg['To'] = os.environ.get('EMAIL_RECEIVER')
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-        server.login(os.environ.get('EMAIL_USER'), os.environ.get('EMAIL_PASS'))
-        server.send_message(msg)
+# 1. Global Indices
+body += "📊 GLOBAL INDICES (Weekly Perf)\n"
+for name, sym in INDICES.items():
+    price, perf = get_weekly_stats(sym)
+    body += f"{name}: {price:,.2f} ({perf:+.2f}% This Week)\n"
 
-if __name__ == "__main__":
-    content = get_market_intelligence()
-    send_email(content)
-    print("Full intelligence report sent!")
+# 2. Stock Performance Sorting
+all_stats = []
+for stock in WATCHLIST:
+    _, perf = get_weekly_stats(stock)
+    all_stats.append({'symbol': stock, 'perf': perf})
+
+# Filter: Winners must be > 0%, Losers must be < 0%
+winners = sorted([s for s in all_stats if s['perf'] > 0], key=lambda x: x['perf'], reverse=True)[:5]
+losers = sorted([s for s in all_stats if s['perf'] < 0], key=lambda x: x['perf'])[:5]
+
+body += "\n🚀 TOP 5 WEEKLY WINNERS\n"
+if not winners:
+    body += "No positive gainers this week.\n"
+for w in winners:
+    body += f"{w['symbol']}: {w['perf']:+.2f}%\n"
+
+body += "\n📉 BOTTOM 5 WEEKLY LOSERS\n"
+for l in losers:
+    body += f"{l['symbol']}: {l['perf']:+.2f}%\n"
+
+# 3. News Headlines
+body += "\n📰 PROFESSIONAL MARKET HEADLINES\n"
+headlines = get_market_news()
+body += "\n".join(headlines)
+
+# --- SEND EMAIL ---
+msg = EmailMessage()
+msg.set_content(body)
+msg['Subject'] = f"Weekly Market Briefing - {report_date}"
+msg['From'] = EMAIL_USER
+msg['To'] = RECEIVER_EMAIL
+
+try:
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+        smtp.login(EMAIL_USER, EMAIL_PASS)
+        smtp.send_message(msg)
+    print("Report sent successfully!")
+except Exception as e:
+    print(f"Error: {e}")
